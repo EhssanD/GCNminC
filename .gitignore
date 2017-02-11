@@ -1,0 +1,6 @@
+*.tar
+*.gz
+*.xz
+/llvm-build
+*.bc
+*.bc.d
