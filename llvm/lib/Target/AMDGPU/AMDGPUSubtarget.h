@@ -274,7 +274,7 @@ public:
   /// \brief Returns the offset in bytes from the start of the input buffer
   ///        of the first explicit kernel argument.
   unsigned getExplicitKernelArgOffset() const {
-    return isAmdHsaOS() ? 0 : 36;
+    return isAmdHsaOS() ? (8 * 6) /*0*/ : 36; // zawawa
   }
 
   unsigned getStackAlignment() const {

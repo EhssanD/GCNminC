@@ -4,3 +4,4 @@
 /llvm-build
 *.bc
 *.bc.d
+*.pdb

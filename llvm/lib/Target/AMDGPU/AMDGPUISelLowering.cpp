@@ -2754,12 +2754,12 @@ SDValue AMDGPUTargetLowering::CreateLiveInRegister(SelectionDAG &DAG,
 
 uint32_t AMDGPUTargetLowering::getImplicitParameterOffset(
     const AMDGPUMachineFunction *MFI, const ImplicitParameter Param) const {
-  uint64_t ArgOffset = MFI->ABIArgOffset;
+  //uint64_t ArgOffset = MFI->ABIArgOffset;
   switch (Param) {
   case GRID_DIM:
-    return ArgOffset;
+    return 0; //ArgOffset;
   case GRID_OFFSET:
-    return ArgOffset + 4;
+    return 4; //ArgOffset + 4;
   }
   llvm_unreachable("unexpected implicit parameter type");
 }

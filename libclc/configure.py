@@ -184,7 +184,7 @@ for target in targets:
 
   for device in available_targets[target]['devices']:
     # The rule for building a .bc file for the specified architecture using clang.
-    clang_bc_flags = "-target %s -I`dirname $in` %s " \
+    clang_bc_flags = "-target %s -I$(shell dirname $in) %s " \
                      "-fno-builtin " \
                      "-D__CLC_INTERNAL " \
                      "-emit-llvm" % (target, clang_cl_includes)

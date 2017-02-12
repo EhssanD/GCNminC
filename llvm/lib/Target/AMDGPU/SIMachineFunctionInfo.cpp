@@ -65,12 +65,12 @@ SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
     HasFlatInstructions(false),
     NumSpilledSGPRs(0),
     NumSpilledVGPRs(0),
-    PrivateSegmentBuffer(false),
-    DispatchPtr(false),
-    QueuePtr(false),
-    DispatchID(false),
-    KernargSegmentPtr(false),
-    FlatScratchInit(false),
+    PrivateSegmentBuffer(true), // zawawa: for CLRX compatibility
+    DispatchPtr(true),          // zawawa: for CLRX compatibility
+    QueuePtr(true),             // zawawa: for CLRX compatibility
+    KernargSegmentPtr(true),    // zawawa: for CLRX compatibility
+    DispatchID(false),          
+    FlatScratchInit(true),      // zawawa: for CLRX compatibility
     GridWorkgroupCountX(false),
     GridWorkgroupCountY(false),
     GridWorkgroupCountZ(false),
