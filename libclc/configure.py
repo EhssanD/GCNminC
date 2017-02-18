@@ -134,7 +134,7 @@ b.build(prepare_builtins, "LLVM_TOOL_LINK",
 b.rule("PREPARE_BUILTINS", "%s -o $out $in" % prepare_builtins,
        'PREPARE-BUILTINS $out')
 b.rule("PYTHON_GEN", "python < $in > $out", "PYTHON_GEN $out")
-b.build('generic/lib/convert.cl', "PYTHON_GEN", ['generic/lib/gen_convert.py'])
+b.build('generic\\lib\\convert.cl', "PYTHON_GEN", ['generic\\lib\\gen_convert.py'])
 
 manifest_deps = set([sys.argv[0], os.path.join(srcdir, 'build', 'metabuild.py'),
                      os.path.join(srcdir, 'build', 'ninja_syntax.py')])
@@ -184,7 +184,7 @@ for target in targets:
 
   for device in available_targets[target]['devices']:
     # The rule for building a .bc file for the specified architecture using clang.
-    clang_bc_flags = "-target %s -I`dirname $in` %s " \
+    clang_bc_flags = "-target %s -I$(shell dirname $in) %s " \
                      "-fno-builtin " \
                      "-D__CLC_INTERNAL " \
                      "-emit-llvm" % (target, clang_cl_includes)
