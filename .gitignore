@@ -1,7 +1,3 @@
-*.tar
-*.gz
-*.xz
-/llvm-build
+*.d
 *.bc
-*.bc.d
-*.pdb
+/*.zip

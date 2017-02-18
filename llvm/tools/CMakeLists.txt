@@ -44,15 +44,16 @@ add_llvm_tool_subdirectory(llvm-profdata)
 # specified.
 add_llvm_external_project(clang)
 #add_llvm_external_project(llgo)
-#add_llvm_external_project(lld)
+add_llvm_external_project(lld)
 #add_llvm_external_project(lldb)
 
 # Automatically add remaining sub-directories containing a 'CMakeLists.txt'
 # file as external projects.
 #add_llvm_implicit_projects()
-add_llvm_tool_subdirectory(llvm-as)
-add_llvm_tool_subdirectory(llvm-link)
 add_llvm_tool_subdirectory(opt)
+add_llvm_tool_subdirectory(llvm-mc)
+add_llvm_tool_subdirectory(llvm-link)
+add_llvm_tool_subdirectory(llvm-as)
 
 # Add subprojects specified using LLVM_EXTERNAL_PROJECTS
 foreach(p ${LLVM_EXTERNAL_PROJECTS})
