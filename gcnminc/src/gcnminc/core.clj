@@ -55,23 +55,28 @@
                       (take-nth 2 (drop 1 metadata)))
         metadata (apply merge metadata)
 
-        lines (map #(clojure.string/replace %1 #"^enable_sgpr_dispatch_ptr = 0$" "/* $0 */\n\t\t.useargs") lines)
+        lines (map #(clojure.string/replace %1 #"^enable_sgpr_kernarg_segment_ptr = 1$" "/* $0 */\n\t\t.useargs") lines)
         lines (map #(clojure.string/replace %1 #"^enable_sgpr_dispatch_ptr = 1$" "/* $0 */\n\t\t.usesetup") lines)
+        lines (map #(clojure.string/replace %1 #"^enable_sgpr_queue_ptr = 1$" "/* $0 */\n\t\t.useenqueue") lines)
         lines (map #(clojure.string/replace %1 #"^enable_sgpr_flat_scratch_init = 1$" "/* $0 */\n\t\t.usegeneric") lines)
         lines (map #(clojure.string/replace %1 #"^enable_sgpr_.*$" "/* $0 */") lines)
+        lines (map #(clojure.string/replace %1 #"^user_sgpr_count = .*$" "/* $0 */") lines)
         lines (map #(clojure.string/replace %1 #"^\.amdgpu_hsa_kernel " ".kernel ") lines)
-        lines (map #(clojure.string/replace %1 #"^compute_pgm_rsrc1_dx10_clamp = 1$" ".dx10clamp") lines)
-        lines (map #(clojure.string/replace %1 #"^compute_pgm_rsrc1_ieee_mode = 1$" ".ieeemode") lines)
-        lines (map #(clojure.string/replace %1 #"^compute_pgm_rsrc1_priv = 1$" ".priv") lines)
-        lines (map #(clojure.string/replace %1 #"^compute_pgm_rsrc1_priority = " ".priority ") lines)
+        lines (map #(clojure.string/replace %1 #"^enable_dx10_clamp = 1$" "/* $0 */\n\t\t.dx10clamp") lines)
+        lines (map #(clojure.string/replace %1 #"^enable_ieee_mode = 1$" "/* $0 */\n\t\t.ieeemode") lines)
+        lines (map #(clojure.string/replace %1 #"^float_mode = " ".floatmode ") lines)
+        lines (map #(clojure.string/replace %1 #"^priv = 1$" ".priv") lines)
+        lines (map #(clojure.string/replace %1 #"^priority = " ".priority ") lines)
         lines (map #(clojure.string/replace %1 #"^workitem_private_segment_byte_size =" ".scratchbuffer") lines)
         lines (map #(clojure.string/replace %1 #"^workgroup_group_segment_byte_size =" ".localsize") lines)
         lines (map #(clojure.string/replace %1 #"^gds_segment_byte_size =" ".gdssize") lines)
+        ;lines (map #(clojure.string/replace %1 #"^.Lfunc_end.*:$" ".align 256") lines)
 
         ;lines (remove #(re-find #"^[ \t]*;" %1) lines)
         ;lines (remove #(re-find #"^$" %1) lines)
         lines (remove #(re-find #"^\.type (.*),@function$" %1) lines)
-        lines (remove #(re-find #"^machine_" %1) lines)
+        lines (remove #(re-find #"^amd_code_" %1) lines)
+        lines (remove #(re-find #"^amd_machine_" %1) lines)
         lines (remove #(re-find #"^kernel_code_" %1) lines)
         ;lines (remove #(re-find #"^enable_sgpr_" %1) lines)
         lines (remove #(re-find #"^compute_pgm_rsrc" %1) lines)
@@ -79,10 +84,13 @@
         lines (remove #(re-find #"^reserved_" %1) lines)
         lines (remove #(re-find #"^kernarg_" %1) lines)
         lines (remove #(re-find #"^is_" %1) lines)
+        lines (remove #(re-find #"^enable_" %1) lines)
+        lines (remove #(re-find #"^granulated_" %1) lines)
 
         lines (remove #(re-find #"^enable_ordered_append_gds" %1) lines)
         lines (remove #(re-find #"^max_scratch_backing_memory_byte_size" %1) lines)
         lines (remove #(re-find #"^private_element_size" %1) lines)
+        lines (remove #(re-find #"^priv = 0$" %1) lines)
         lines (remove #(re-find #"^workgroup_fbarrier_count" %1) lines)
         lines (remove #(re-find #"^wavefront_sgpr_count" %1) lines)
         lines (remove #(re-find #"^workitem_vgpr_count" %1) lines)
@@ -93,7 +101,6 @@
         lines (remove #(re-find #"^runtime_loader_kernel_symbol" %1) lines)
         lines (remove #(re-find #"^.text$" %1) lines)
         lines (remove #(re-find #"^.hsa_code_object_" %1) lines)
-        lines (remove #(re-find #"^.Lfunc_end.*:$" %1) lines)
         lines (remove #(re-find #"^\.section \"\.note\.GNU-stack\"$" %1) lines)
         lines (remove #(re-find #"^(\.globl |\.p2align |\.ident |\.size )" %1) lines)
 
@@ -115,7 +122,8 @@
                                       (list
                                         "\t.config"
                                         "\t\t.dims x"
-                                        "\t\t.floatmode 192")
+                                        "\t\t.pgmrsrc2 0x00000040" ; Enable trap handlers.
+                                        )
                                       (map #(clojure.string/replace %1 #"^" "\t\t") (second groups))
                                       (list
                                         "\t\t.arg _.global_offset_0, \"size_t\", long"
@@ -125,12 +133,16 @@
                                         "\t\t.arg _.vqueue_pointer, \"size_t\", long"
                                         "\t\t.arg _.aqlwrap_pointer, \"size_t\", long")
                                       (get metadata (clojure.string/replace (first (first groups)) #"^\.kernel " ""))
-                                      (list "\t.text")
+                                      (list
+                                        "\t.text"
+                                        ;"\t\t\ts_mov_b32 m0, -1"
+                                        )
                                       (map #(clojure.string/replace %1 #"^" "\t\t") (list (second (first groups))))
                                       (->> (nth groups 2 nil)
                                            (map #(clojure.string/replace %1 #"^" "\t\t"))
                                            (map #(clojure.string/replace %1 #"(flat_atomic_(add|sub)) ([^,]+), ([^,]+)$" "$1 $4, $3, $4"))
-                                           ;(map #(clojure.string/replace %1 #"_e32 " " "))
+                                           (map #(clojure.string/replace %1 #"s_waitcnt$" "s_nop 0"))
+                                           ;(map #(clojure.string/replace %1 #"_e(32|64) " " "))
                                            (map #(clojure.string/replace %1 #"^.*[^:]$" "\t$0"))
                                            (map #(clojure.string/replace %1 #"_lo_i32 " "_lo_u32 "))
                                            ))
@@ -143,10 +155,8 @@
                  (concat
                    (list
                      ".amdcl2\n"
-                     ".gpu Stoney\n"
+                     ".gpu Ellesmere\n"
                      ".64bit\n"
-                     ".arch_minor 0\n"
-                     ".arch_stepping 4\n"
                      ".driver_version 200406\n"
-                     "")
+                     ".acl_version \"AMD-COMP-LIB-v0.8 (0.0.SC_BUILD_NUMBER)\"")
                    (apply str (map #(str %1 "\n") (apply concat kernels))))))))
