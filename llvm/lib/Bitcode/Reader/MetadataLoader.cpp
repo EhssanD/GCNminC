@@ -358,6 +358,9 @@ class PlaceholderQueue {
   std::deque<DistinctMDOperandPlaceholder> PHs;
 
 public:
+  ~PlaceholderQueue() {
+    assert(empty() && "PlaceholderQueue hasn't been flushed before being destroyed");
+  }
   bool empty() { return PHs.empty(); }
   DistinctMDOperandPlaceholder &getPlaceholderOp(unsigned ID);
   void flush(BitcodeReaderMetadataList &MetadataList);
@@ -457,7 +460,7 @@ class MetadataLoader::MetadataLoaderImpl {
                          PlaceholderQueue &Placeholders, StringRef Blob,
                          unsigned &NextMetadataNo);
   Error parseMetadataStrings(ArrayRef<uint64_t> Record, StringRef Blob,
-                             std::function<void(StringRef)> CallBack);
+                             function_ref<void(StringRef)> CallBack);
   Error parseGlobalObjectAttachment(GlobalObject &GO,
                                     ArrayRef<uint64_t> Record);
   Error parseMetadataKindRecord(SmallVectorImpl<uint64_t> &Record);
@@ -520,7 +523,7 @@ public:
                      bool IsImporting)
       : MetadataList(TheModule.getContext()), ValueList(ValueList),
         Stream(Stream), Context(TheModule.getContext()), TheModule(TheModule),
-        getTypeByID(getTypeByID), IsImporting(IsImporting) {}
+        getTypeByID(std::move(getTypeByID)), IsImporting(IsImporting) {}
 
   Error parseMetadata(bool ModuleLevel);
 
@@ -564,7 +567,7 @@ public:
   void shrinkTo(unsigned N) { MetadataList.shrinkTo(N); }
 };
 
-Error error(const Twine &Message) {
+static Error error(const Twine &Message) {
   return make_error<StringError>(
       Message, make_error_code(BitcodeError::CorruptedBitcode));
 }
@@ -1240,7 +1243,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     break;
   }
   case bitc::METADATA_COMPILE_UNIT: {
-    if (Record.size() < 14 || Record.size() > 17)
+    if (Record.size() < 14 || Record.size() > 18)
       return error("Invalid record");
 
     // Ignore Record[0], which indicates whether this compile unit is
@@ -1253,7 +1256,8 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
         getMDOrNull(Record[12]), getMDOrNull(Record[13]),
         Record.size() <= 15 ? nullptr : getMDOrNull(Record[15]),
         Record.size() <= 14 ? 0 : Record[14],
-        Record.size() <= 16 ? true : Record[16]);
+        Record.size() <= 16 ? true : Record[16],
+        Record.size() <= 17 ? false : Record[17]);
 
     MetadataList.assignValue(CU, NextMetadataNo);
     NextMetadataNo++;
@@ -1433,6 +1437,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     } else if (Version == 0) {
       // Upgrade old metadata, which stored a global variable reference or a
       // ConstantInt here.
+      NeedUpgradeToDIGlobalVariableExpression = true;
       Metadata *Expr = getMDOrNull(Record[9]);
       uint32_t AlignInBits = 0;
       if (Record.size() > 11) {
@@ -1463,8 +1468,6 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
       DIGlobalVariableExpression *DGVE = nullptr;
       if (Attach || Expr)
         DGVE = DIGlobalVariableExpression::getDistinct(Context, DGV, Expr);
-      else
-        NeedUpgradeToDIGlobalVariableExpression = true;
       if (Attach)
         Attach->addDebugInfo(DGVE);
 
@@ -1611,7 +1614,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
 
 Error MetadataLoader::MetadataLoaderImpl::parseMetadataStrings(
     ArrayRef<uint64_t> Record, StringRef Blob,
-    std::function<void(StringRef)> CallBack) {
+    function_ref<void(StringRef)> CallBack) {
   // All the MDStrings in the block are emitted together in a single
   // record.  The strings are concatenated and stored in a blob along with
   // their sizes.
@@ -1808,8 +1811,8 @@ MetadataLoader::MetadataLoader(BitstreamCursor &Stream, Module &TheModule,
                                BitcodeReaderValueList &ValueList,
                                bool IsImporting,
                                std::function<Type *(unsigned)> getTypeByID)
-    : Pimpl(llvm::make_unique<MetadataLoaderImpl>(Stream, TheModule, ValueList,
-                                                  getTypeByID, IsImporting)) {}
+    : Pimpl(llvm::make_unique<MetadataLoaderImpl>(
+          Stream, TheModule, ValueList, std::move(getTypeByID), IsImporting)) {}
 
 Error MetadataLoader::parseMetadata(bool ModuleLevel) {
   return Pimpl->parseMetadata(ModuleLevel);

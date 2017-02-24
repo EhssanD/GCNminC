@@ -2,3 +2,5 @@
 *.bc
 /*.zip
 /llvm-build
+/llvm4
+/llvm4-build

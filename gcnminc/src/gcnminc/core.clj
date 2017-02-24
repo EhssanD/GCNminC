@@ -122,7 +122,7 @@
                                       (list
                                         "\t.config"
                                         "\t\t.dims x"
-                                        "\t\t.pgmrsrc2 0x00000040" ; Enable trap handlers.
+                                        ; "\t\t.pgmrsrc2 0x00006040" ; Enable trap handlers.
                                         )
                                       (map #(clojure.string/replace %1 #"^" "\t\t") (second groups))
                                       (list

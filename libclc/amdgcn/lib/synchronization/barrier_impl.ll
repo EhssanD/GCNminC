@@ -4,6 +4,7 @@ declare void @llvm.amdgcn.s.barrier() #0
 
 define void @barrier(i32 %flags) #2 {
 barrier_local_test:
+  call void asm sideeffect "s_waitcnt vmcnt(0) expcnt(0) lgkmcnt(0)", ""() ; zawawa
   %CLK_LOCAL_MEM_FENCE = call i32 @__clc_clk_local_mem_fence()
   %0 = and i32 %flags, %CLK_LOCAL_MEM_FENCE
   %1 = icmp ne i32 %0, 0

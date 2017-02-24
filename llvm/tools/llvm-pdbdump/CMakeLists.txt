@@ -7,6 +7,8 @@ set(LLVM_LINK_COMPONENTS
   )
 
 add_llvm_tool(llvm-pdbdump
+  Analyze.cpp
+  CompactTypeDumpVisitor.cpp
   llvm-pdbdump.cpp
   YamlSymbolDumper.cpp
   YamlTypeDumper.cpp
