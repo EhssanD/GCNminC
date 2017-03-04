@@ -1,11 +1,13 @@
 (ns gcnminc.core
-  (:gen-class))
+  (:require [clojure.tools.cli :refer [parse-opts]]
+            [clojure.java.shell :refer [sh]])
 
-(defn -main
-  [& args]
-  (let [input-filename (nth args 0)
-        output-filename (nth args 1)
-        lines (clojure.string/split (slurp input-filename) #"([\t ]*;[^\n]*)?[\t ]*\r?\n\t*") ; Convert consecutive white spaces into one white space.
+  (:gen-class)
+  (:import (java.net URLDecoder)))
+
+(defn convert-llvm-output
+  [gpu input-filename output-filename]
+  (let [lines (clojure.string/split (slurp input-filename) #"([\t ]*;[^\n]*)?[\t ]*\r?\n\t*") ; Convert consecutive white spaces into one white space.
         lines (remove #(re-find #"^$" %1) lines)
         lines (remove #(re-find #"^;" %1) lines)
         lines (map #(clojure.string/replace %1 #"[ \t]+" " ") lines)
@@ -28,6 +30,7 @@
                                    value-type (case value-type
                                                 "0" "structure"
                                                 "1" "uchar"
+                                                "6" "int"
                                                 "7" "uint"
                                                 "10" "ulong"
                                                 value-type)
@@ -155,8 +158,81 @@
                  (concat
                    (list
                      ".amdcl2\n"
-                     ".gpu Ellesmere\n"
+                     (str ".gpu " gpu"\n")
                      ".64bit\n"
                      ".driver_version 200406\n"
-                     ".acl_version \"AMD-COMP-LIB-v0.8 (0.0.SC_BUILD_NUMBER)\"")
+                     ".acl_version \"AMD-COMP-LIB-v0.8 (0.0.SC_BUILD_NUMBER)\"\n")
                    (apply str (map #(str %1 "\n") (apply concat kernels))))))))
+
+(def cli-options
+  ;; An option with a required argument
+  [["-g" "--gpu GPU" "GPU"
+    :default "Ellesmere"
+    ]
+   ["-p" "--gcnminc-path PATH" "GCNminC path"
+    ]
+   ["-h" "--help"]])
+
+(defn -main
+  [& args]
+  (let [args (clojure.tools.cli/parse-opts args cli-options)
+        jar-path (.getPath (.getLocation (.getCodeSource (.getProtectionDomain gcnminc.core))))
+        jar-path (URLDecoder/decode jar-path "UTF-8")
+        gcnminc-path (clojure.string/replace jar-path #"/[^/]+/[^/]+/[^/]+/[^/]+$" "")
+        gcnminc-path (clojure.string/replace gcnminc-path #"^/([a-zA-Z]):/" "$1:/") ; For Windows
+        _ (println gcnminc-path)
+        gpu (:gpu (:options args))
+        input-filename (nth (:arguments args) 0)
+        output-filename (nth (:arguments args) 1)
+        llvm-output-file     (java.io.File/createTempFile "GCNminC-llvm-" ".asm")
+        llvm-output-filename (.getPath llvm-output-file)
+        _                    (.delete llvm-output-file)
+        gcnminc-output-file     (java.io.File/createTempFile "GCNminC-gcnminc-" ".asm")
+        gcnminc-output-filename (.getPath gcnminc-output-file)
+        _                       (.delete gcnminc-output-file)
+        clang-path (cond
+                     (.exists (clojure.java.io/file (str gcnminc-path "/llvm-build/Release/bin/clang.EXE"))) (str gcnminc-path "/llvm-build/Release/bin/clang.EXE")
+                     (.exists (clojure.java.io/file (str gcnminc-path "/llvm-build/Debug/bin/clang.EXE"))) (str gcnminc-path "/llvm-build/Debug/bin/clang.EXE")
+                     (.exists (clojure.java.io/file (str gcnminc-path "/llvm-build/Release/bin/clang"))) (str gcnminc-path "/llvm-build/Release/bin/clang")
+                     (.exists (clojure.java.io/file (str gcnminc-path "/llvm-build/Debug/bin/clang"))) (str gcnminc-path "/llvm-build/Debug/bin/clang")
+                     (.exists (clojure.java.io/file (str gcnminc-path "/llvm-build/bin/clang"))) (str gcnminc-path "/llvm-build/bin/clang")
+                     (.exists (clojure.java.io/file (str gcnminc-path "/bin/clang.EXE"))) (str gcnminc-path "/bin/clang.EXE")
+                     :else (str gcnminc-path "/bin/clang")
+                     )
+        libclc-path (cond
+                     (.exists (clojure.java.io/file (str gcnminc-path "/libclc/built_libs/amdgcn--amdhsa.bc"))) (str gcnminc-path "/libclc/built_libs/amdgcn--amdhsa.bc")
+                     :else (str gcnminc-path "/lib/amdgcn--amdhsa.bc")
+                     )]
+    (println "Compiling:" input-filename)
+    (println (:err
+               (clojure.java.shell/sh
+                 clang-path
+                 "-target" "amdgcn--amdhsa"
+                 "-mcpu=gfx804"
+                 (str "-I" gcnminc-path "/libclc/generic/include")
+                 "-include" (str gcnminc-path "/libclc/generic/include/clc/clc.h")
+                 "-Dcl_clang_storage_class_specifiers "
+                 "-x" "cl"
+                 "-std=CL1.2"
+                 input-filename
+                 "-D__OPENCL_VERSION__=120"
+                 "-DWORKSIZE=256"
+                 "-S"
+                 "-o" llvm-output-filename
+                 "-Xclang"
+                 "-mlink-bitcode-file"
+                 "-Xclang"
+                 libclc-path
+                 "-fno-builtin"
+                 "-D__GCNMINC__"
+                 "-D__GCN3__"
+                 "-O3")))
+    (println "Converting output..." gpu llvm-output-filename gcnminc-output-filename)
+    (convert-llvm-output gpu llvm-output-filename gcnminc-output-filename)
+    (println "Generating binary:" output-filename )
+    (println (:err
+      (clojure.java.shell/sh
+       (str gcnminc-path "/CLRadeonExtender/build/programs/Release/clrxasm.EXE")
+       gcnminc-output-filename
+       "-o" output-filename))))
+  (shutdown-agents))
