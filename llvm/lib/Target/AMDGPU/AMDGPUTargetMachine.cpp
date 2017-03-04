@@ -83,14 +83,14 @@ static cl::opt<bool> EnableLoadStoreVectorizer(
 static cl::opt<bool> ScalarizeGlobal(
   "amdgpu-scalarize-global-loads",
   cl::desc("Enable global load scalarization"),
-  cl::init(false),
+  cl::init(true), // zawawa
   cl::Hidden);
 
 // Option to run internalize pass.
 static cl::opt<bool> InternalizeSymbols(
   "amdgpu-internalize-symbols",
   cl::desc("Enable elimination of non-kernel functions and unused globals"),
-  cl::init(false),
+  cl::init(true), // zawawa
   cl::Hidden);
 
 extern "C" void LLVMInitializeAMDGPUTarget() {

@@ -43,7 +43,7 @@ using namespace llvm;
 static cl::opt<unsigned> SkipThresholdFlag(
   "amdgpu-skip-threshold",
   cl::desc("Number of instructions before jumping over divergent control flow"),
-  cl::init(12), cl::Hidden);
+  cl::init(6), cl::Hidden); // zawawa: This was 12.
 
 namespace {
 

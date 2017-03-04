@@ -214,7 +214,7 @@ bool AMDGPUPromoteAlloca::runOnFunction(Function &F) {
   // on other factors..
   unsigned OccupancyHint = ST.getWavesPerEU(F).second;
   if (OccupancyHint == 0)
-    OccupancyHint = 4; // zawawa
+    OccupancyHint = 1; // zawawa
 
   // Clamp to max value.
   OccupancyHint = std::min(OccupancyHint, ST.getMaxWavesPerEU());
@@ -513,11 +513,11 @@ static bool isCallPromotable(CallInst *CI) {
   case Intrinsic::memcpy:
   case Intrinsic::memmove:
   case Intrinsic::memset:
+  case Intrinsic::objectsize:
+    return true;
   case Intrinsic::invariant_start:
   case Intrinsic::invariant_end:
   case Intrinsic::invariant_group_barrier:
-  case Intrinsic::objectsize:
-    return true;
   case Intrinsic::lifetime_start: // zawawa
   case Intrinsic::lifetime_end:   // zawawa
   default:

@@ -94,7 +94,7 @@ def FeatureApertureRegs : SubtargetFeature<"aperture-regs",
 // If XNACK is disabled, the 2 SGPRs can be used for general purposes.
 def FeatureXNACK : SubtargetFeature<"xnack",
   "EnableXNACK",
-  "false",
+  "false", // zawawa
   "Enable XNACK support"
 >;
 
@@ -313,7 +313,7 @@ def FeatureEnableLoadStoreOpt : SubtargetFeature <"load-store-opt",
 def FeatureEnableUnsafeDSOffsetFolding : SubtargetFeature <
   "unsafe-ds-offset-folding",
   "EnableUnsafeDSOffsetFolding",
-  "true",
+  "false", // debug
   "Force using DS instruction immediate offsets on SI"
 >;
 
