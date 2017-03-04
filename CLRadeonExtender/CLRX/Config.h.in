@@ -1,0 +1,213 @@
+/*
+ *  CLRadeonExtender - Unofficial OpenCL Radeon Extensions Library
+ *  Copyright (C) 2014-2017 Mateusz Szpakowski
+ *
+ *  This library is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU Lesser General Public
+ *  License as published by the Free Software Foundation; either
+ *  version 2.1 of the License, or (at your option) any later version.
+ *
+ *  This library is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *  Lesser General Public License for more details.
+ *
+ *  You should have received a copy of the GNU Lesser General Public
+ *  License along with this library; if not, write to the Free Software
+ *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+
+#ifndef __CLRX_CONFIG_H__
+#define __CLRX_CONFIG_H__
+
+#define CLRX_VERSION "${CLRX_VERSION}"
+
+#define CLRX_MAJOR_VERSION ${CLRX_MAJOR_VERSION}
+
+#define CLRX_MINOR_VERSION ${CLRX_MINOR_VERSION}
+
+#define CLRX_MICRO_VERSION ${CLRX_MICRO_VERSION}
+
+#cmakedefine HAVE_GNU11
+
+#cmakedefine HAVE_ELF_H
+
+#cmakedefine HAVE_INT128
+
+#cmakedefine HAVE_UBUNTU_GPUPRO
+
+/* architecture setup */
+
+#if defined(__i386__) || defined(__i486__) || defined(__i586__) || defined(__i686__) || \
+        defined(_M_IX86) || defined(__i386) || defined(_X86_)
+#  define HAVE_ARCH_INTEL 1
+#  define HAVE_ARCH_X86 1
+#  define HAVE_32BIT 1
+#endif
+
+#if defined(__amd64__) || defined(__amd64) || defined(__x86_64__) || defined(__x86_64) || \
+        defined(_M_X64) || defined(_M_AMD64)
+#  define HAVE_ARCH_INTEL 1
+#  define HAVE_ARCH_X86_64 1
+#  define HAVE_64BIT 1
+#endif
+
+#if defined(__powerpc__) || defined(__powerpc) || defined(_M_PPC) || \
+    defined(__POWERPC__) || defined(__ppc)
+#  define HAVE_ARCH_POWERPC 1
+#  if defined(__powerpc64__) || defined(__ppc64__) || _M_PPC>=620 || defined(__arch64__)
+#    define HAVE_ARCH_POWERPC64 1
+#    define HAVE_64BIT 1
+#  else
+#    define HAVE_ARCH_POWERPC32 1
+#    define HAVE_32BIT 1
+#  endif
+#endif
+
+#if defined(__arm__) || defined(__thumb__) || defined(_M_ARM) || defined(_M_ARMT)
+#  define HAVE_ARCH_ARM 1
+#  if defined(__aarch64__)
+#    define HAVE_ARCH_ARM64 1
+#    define HAVE_64BIT 1
+#  else
+#    define HAVE_ARCH_ARM32 1
+#    define HAVE_32BIT 1
+#  endif
+#endif
+
+#if !defined(HAVE_ARCH_ARM) && defined(__aarch64__)
+#  define HAVE_ARCH_ARM 1
+#  define HAVE_ARCH_ARM64 1
+#  define HAVE_64BIT 1
+#endif
+
+/* endianness */
+#if defined(__BIG_ENDIAN__) || defined(__ARMEB__) || defined(__THUMBEB__) || \
+    defined(__AARCH64EB__) || defined(_MIPSEB)  || defined(__MIPSEB__) || \
+    defined(__MIPSEB)
+#  define HAVE_BIG_ENDIAN 1
+#else
+#  define HAVE_LITTLE_ENDIAN 1
+#endif
+
+/* machine bits */
+#if !defined(HAVE_32BIT) && !defined(HAVE_64BIT)
+#  ifdef _WIN64
+#    define HAVE_64BIT 1
+#  else
+#    ifdef _WIN32
+#      define HAVE_32BIT 1
+#    endif
+#  endif
+#endif
+
+#if !defined(HAVE_32BIT) && !defined(HAVE_64BIT)
+#  if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__==8
+#    define HAVE_64BIT 1
+#  else
+#    define HAVE_32BIT 1
+#  endif
+#endif
+
+/* operating system */
+
+#ifdef __GNU__
+#  define HAVE_GNU 1
+#endif
+
+#if defined(__linux__) || defined(linux)
+#  define HAVE_LINUX 1
+#endif
+
+#if defined(_WIN32) || defined(_WIN64) || defined(__WINDOWS__) || defined(__WIN32__)
+#  define HAVE_WINDOWS 1
+#endif
+
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || \
+        defined(__bsdi__) || defined(__DragonFly__)
+#  define HAVE_BSD 1
+#endif
+
+/* config setup */
+
+#ifndef HAVE_WINDOWS
+#  define SYSTEM_CONFIG_PATH "/etc"
+
+#  ifdef HAVE_32BIT
+#  define DEFAULT_AMDOCLPATH "/usr/lib/libamdocl32.so"
+#  else
+#    ifdef HAVE_UBUNTU_GPUPRO
+#    define DEFAULT_AMDOCLPATH "/usr/lib/x86_64-linux-gnu/amdgpu-pro/libamdocl64.so"
+#    else
+#    define DEFAULT_AMDOCLPATH "/usr/lib64/libamdocl64.so"
+#    endif
+#  endif
+
+#  define CLRX_NATIVE_DIR_SEP '/'
+#  define CLRX_NATIVE_DIR_SEP_S "/"
+
+#  define CLRX_ALT_DIR_SEP '\\'
+#  define CLRX_ALT_DIR_SEP_S "\\"
+
+#else
+#  define SYSTEM_CONFIG_PATH "c:\\etc"
+
+#  ifdef HAVE_32BIT
+#  define DEFAULT_AMDOCLPATH "c:\\Windows\\System32\\amdocl.dll"
+#  else
+#  define DEFAULT_AMDOCLPATH "c:\\Windows\\System32\\amdocl64.dll"
+#  endif
+
+#  define CLRX_NATIVE_DIR_SEP '\\'
+#  define CLRX_NATIVE_DIR_SEP_S "\\"
+
+#  define CLRX_ALT_DIR_SEP '/'
+#  define CLRX_ALT_DIR_SEP_S "/"
+
+#  define strcasecmp(A,B) _stricmp(A,B)
+#  define strncasecmp(A,B,N) _strnicmp(A,B,N)
+#  if _MSC_VER<1900
+#    define snprintf(B,N,F,...) _snprintf(B,N,F,__VA_ARGS__)
+#  endif
+#endif
+
+/* symbols visibility */
+
+#if __GNUC__ >= 4
+#  define CLRX_INTERNAL __attribute__((visibility("hidden")))
+#else
+#  define CLRX_INTERNAL
+#endif
+
+/* types and defs */
+
+typedef signed char cxchar;
+typedef unsigned char cxuchar;
+typedef unsigned char cxbyte;
+typedef signed short cxshort;
+typedef unsigned short cxushort;
+typedef signed int cxint;
+typedef unsigned int cxuint;
+typedef signed long cxlong;
+typedef unsigned long cxulong;
+typedef signed long long cxllong;
+typedef unsigned long long cxullong;
+#ifdef _MSC_VER
+#  ifdef HAVE_64BIT
+typedef signed long long ssize_t;
+#    define SSIZE_MIN (-9223372036854775808LL)
+#    define SSIZE_MAX (9223372036854775807LL)
+#  else
+typedef signed long ssize_t;
+#    define SSIZE_MIN (-2147483648LL)
+#    define SSIZE_MAX (2147483647LL)
+#  endif
+#  define NOMINMAX
+#endif
+
+#if __cplusplus < 201103L || (__GNUC__ == 4 && __GNUC_MINOR__ < 8)
+#define __STDC_LIMIT_MACROS 1
+#define __STDC_FORMAT_MACROS 1
+#endif
+
+#endif
