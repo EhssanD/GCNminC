@@ -171,6 +171,8 @@
     ]
    ["-p" "--gcnminc-path PATH" "GCNminC path"
     ]
+   ["-v" "--verbose"]
+   ["-d" "--debug"]
    ["-h" "--help"]])
 
 (defn -main
@@ -199,11 +201,15 @@
                      (.exists (clojure.java.io/file (str gcnminc-path "/bin/clang.EXE"))) (str gcnminc-path "/bin/clang.EXE")
                      :else (str gcnminc-path "/bin/clang")
                      )
-        libclc-path (cond
-                     (.exists (clojure.java.io/file (str gcnminc-path "/libclc/built_libs/amdgcn--amdhsa.bc"))) (str gcnminc-path "/libclc/built_libs/amdgcn--amdhsa.bc")
-                     :else (str gcnminc-path "/lib/amdgcn--amdhsa.bc")
-                     )]
+        clrxasm-path (cond
+                     (.exists (clojure.java.io/file (str gcnminc-path "/CLRadeonExtender/build/programs/Release/clrxasm.EXE"))) (str gcnminc-path "/CLRadeonExtender/build/programs/Release/clrxasm.EXE")
+                     :else (str gcnminc-path "/CLRadeonExtender/build/programs/clrxasm")
+                     )
+        libclc-path (str gcnminc-path "/libclc/built_libs/amdgcn--amdhsa.bc")
+                     ]
     (println "Compiling:" input-filename)
+    (if (:debug (:options args))
+      (println "libclc-path:" libclc-path))
     (println (:err
                (clojure.java.shell/sh
                  clang-path
@@ -232,7 +238,7 @@
     (println "Generating binary:" output-filename )
     (println (:err
       (clojure.java.shell/sh
-       (str gcnminc-path "/CLRadeonExtender/build/programs/Release/clrxasm.EXE")
+       clrxasm-path
        gcnminc-output-filename
        "-o" output-filename))))
   (shutdown-agents))

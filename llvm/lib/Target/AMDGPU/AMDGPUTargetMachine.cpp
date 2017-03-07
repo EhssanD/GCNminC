@@ -90,7 +90,7 @@ static cl::opt<bool> ScalarizeGlobal(
 static cl::opt<bool> InternalizeSymbols(
   "amdgpu-internalize-symbols",
   cl::desc("Enable elimination of non-kernel functions and unused globals"),
-  cl::init(true), // zawawa
+  cl::init(false), // zawawa: This must be set to false for libclc.
   cl::Hidden);
 
 extern "C" void LLVMInitializeAMDGPUTarget() {
