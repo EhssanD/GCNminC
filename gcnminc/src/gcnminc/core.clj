@@ -143,8 +143,34 @@
                                       (map #(clojure.string/replace %1 #"^" "\t\t") (list (second (first groups))))
                                       (->> (nth groups 2 nil)
                                            (map #(clojure.string/replace %1 #"^" "\t\t"))
+                                           (map #(clojure.string/replace %1 #"v_mov_b64[ \t]+v\[([0-9]+):([0-9]+)\],[ \t]+v\[([0-9]+):([0-9]+)\]" "v_mov_b32 v$1, v$3; v_mov_b32 v$2, v$4"))
+                                           (map #(clojure.string/replace
+                                                   %1
+                                                   #"v_mov_b128[ \t]+v\[([0-9]+):([0-9]+)\],[ \t]+v\[([0-9]+):([0-9]+)\]"
+                                                   (fn [result]
+                                                      (str
+                                                        "v_mov_b32 v" (nth result 1)             ", v" (nth result 3)             "; "
+                                                        "v_mov_b32 v" (+ 1 (Integer. (nth result 1))) ", v" (+ 1 (Integer. (nth result 3))) "; "
+                                                        "v_mov_b32 v" (+ 2 (Integer. (nth result 1))) ", v" (+ 2 (Integer. (nth result 3))) "; "
+                                                        "v_mov_b32 v" (+ 3 (Integer. (nth result 1))) ", v" (+ 3 (Integer. (nth result 3)))))))
+                                           (map #(clojure.string/replace
+                                                   %1
+                                                   #"([^a-zA-Z_0-9])v\[([0-9]+):([0-9]+)\]\.x"
+                                                   (fn [result] (str (nth result 1) "v" (+ 0 (Integer. (nth result 2)))))))
+                                           (map #(clojure.string/replace
+                                                   %1
+                                                   #"([^a-zA-Z_0-9])v\[([0-9]+):([0-9]+)\]\.y"
+                                                   (fn [result] (str (nth result 1) "v" (+ 1 (Integer. (nth result 2)))))))
+                                           (map #(clojure.string/replace
+                                                   %1
+                                                   #"([^a-zA-Z_0-9])v\[([0-9]+):([0-9]+)\]\.z"
+                                                   (fn [result] (str (nth result 1) "v" (+ 2 (Integer. (nth result 2)))))))
+                                           (map #(clojure.string/replace
+                                                   %1
+                                                   #"([^a-zA-Z_0-9])v\[([0-9]+):([0-9]+)\]\.w"
+                                                   (fn [result] (str (nth result 1) "v" (+ 3 (Integer. (nth result 2)))))))
                                            (map #(clojure.string/replace %1 #"(flat_atomic_(add|sub)) ([^,]+), ([^,]+)$" "$1 $4, $3, $4"))
-                                           (map #(clojure.string/replace %1 #"s_waitcnt$" "s_nop 0"))
+                                           (map #(clojure.string/replace %1 #"s_waitcnt$" "s_waitcnt vmcnt(0) lgmkcnt(0) expcnt(0)"))
                                            ;(map #(clojure.string/replace %1 #"_e(32|64) " " "))
                                            (map #(clojure.string/replace %1 #"^.*[^:]$" "\t$0"))
                                            (map #(clojure.string/replace %1 #"_lo_i32 " "_lo_u32 "))
@@ -219,7 +245,7 @@
                  "-include" (str gcnminc-path "/libclc/generic/include/clc/clc.h")
                  "-Dcl_clang_storage_class_specifiers "
                  "-x" "cl"
-                 "-std=CL1.2"
+                 "-std=CL2.0"
                  input-filename
                  "-D__OPENCL_VERSION__=120"
                  "-DWORKSIZE=256"
