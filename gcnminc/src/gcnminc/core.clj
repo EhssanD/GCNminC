@@ -6,8 +6,8 @@
   (:import (java.net URLDecoder)))
 
 (defn convert-llvm-output
-  [gpu input-filename output-filename]
-  (let [lines (clojure.string/split (slurp input-filename) #"([\t ]*;[^\n]*)?[\t ]*\r?\n\t*") ; Convert consecutive white spaces into one white space.
+  [gpu input-file-path output-file-path]
+  (let [lines (clojure.string/split (slurp input-file-path) #"([\t ]*;[^\n]*)?[\t ]*\r?\n\t*") ; Convert consecutive white spaces into one white space.
         lines (remove #(re-find #"^$" %1) lines)
         lines (remove #(re-find #"^;" %1) lines)
         lines (map #(clojure.string/replace %1 #"[ \t]+" " ") lines)
@@ -16,8 +16,7 @@
 
         ;metadata (remove #(not (re-find #"amd\.ArgSize" %1)) metadata)
         ;metadata (clojure.string/split (second metadata) #"  - ")
-        metadata (remove #(not (re-find #"(amd\.KernelName|amd\.ArgSize)" %1)) metadata)
-        metadata (remove #(re-find #"amd\.ArgKind: [789]," %1) metadata)
+        metadata (remove #(not (re-find #"(amd\.KernelName|amd\.ArgKind)" %1)) metadata)
         metadata (map #(clojure.string/replace %1 #", amd\.Language: OpenCL C, amd\.LanguageVersion: \[ 1, 2 \], amd.Args:" "") metadata)
         metadata (map #(clojure.string/replace %1 #" *- \{ *" "") metadata)
         metadata (map #(clojure.string/replace %1 #"\} *" "") metadata)
@@ -26,10 +25,15 @@
                          (clojure.string/replace (first %1) #"^amd\.KernelName: ([^,]+).*$" "$1")
                          (map
                            (fn [arg index]
-                             (let [[_ size align kind value-type type-name] (re-find #"^amd.ArgSize: ([^,]+), amd.ArgAlign: ([^,]+), amd.ArgKind: ([^,]+), amd.ArgValueType: ([^,]+), amd.ArgTypeName: '?([^,']+)'?," arg)
+                             (let [[_ size] (re-find #"amd.ArgSize: ([^,]+)" arg)
+                                   [_ align] (re-find #"amd.ArgAlign: ([^,]+)" arg)
+                                   [_ kind] (re-find #"amd.ArgKind: ([^,]+)" arg)
+                                   [_ value-type] (re-find #"amd.ArgValueType: ([^,]+)" arg)
+                                   [_ type-name] (re-find #"amd.ArgTypeName: '?([^,']+)'?" arg)
                                    value-type (case value-type
                                                 "0" "structure"
-                                                "1" "uchar"
+                                                "1" "char"
+                                                "2" "uchar"
                                                 "6" "int"
                                                 "7" "uint"
                                                 "10" "ulong"
@@ -42,16 +46,23 @@
                                                "3" "local"
                                                nil)
                                    const? (if (re-find #"amd.ArgIsConst: 1" arg) true false)
-                                   pointer? (if (re-find #"\*$" type-name) true false)
+                                   pointer? (if (and type-name (re-find #"\*$" type-name)) true false)
                                    structure? (= value-type "structure")]
-                               (str
-                                 "\t\t.arg arg" index ", "
-                                 "\"" type-name "\", "
-                                 value-type (if pointer? "*" "") (if (or pointer? structure?) ", ")
-                                 (if structure? size)  (if (and structure? (or pointer?)) ", ")
-                                 (if pointer? (str addr-qual))
-                                 ;(if const? "const")
-                                 )))
+                               (case kind
+                                 "7" "\t\t.arg _.global_offset_0, \"size_t\", long"
+                                 "8" "\t\t.arg _.global_offset_1, \"size_t\", long"
+                                 "9" "\t\t.arg _.global_offset_2, \"size_t\", long"
+                                 "11" "\t\t.arg _.printf_buffer, \"size_t\", void*, global, , rdonly"
+                                 "12" "\t\t.arg _.vqueue_pointer, \"size_t\", long"
+                                 "13" "\t\t.arg _.aqlwrap_pointer, \"size_t\", long"
+                                 (str
+                                   "\t\t.arg arg" index ", "
+                                   "\"" type-name "\", "
+                                   value-type (if pointer? "*" "") (if (or pointer? structure?) ", ")
+                                   (if structure? size)  (if (and structure? (or pointer?)) ", ")
+                                   (if pointer? (str addr-qual))
+                                   ;(if const? "const")
+                                   ))))
                            %2
                            (range)))
                       (take-nth 2 metadata)
@@ -73,7 +84,12 @@
         lines (map #(clojure.string/replace %1 #"^workitem_private_segment_byte_size =" ".scratchbuffer") lines)
         lines (map #(clojure.string/replace %1 #"^workgroup_group_segment_byte_size =" ".localsize") lines)
         lines (map #(clojure.string/replace %1 #"^gds_segment_byte_size =" ".gdssize") lines)
+        lines (map #(clojure.string/replace %1 #"^\.section \.AMDGPU\.csdata.*$" ".data") lines)
+        lines (map #(clojure.string/replace %1 #"^\.section \.rodata.*$" ".globaldata") lines)
+        lines (map #(clojure.string/replace %1 #"^s_add_u32 (s[0-9]+), (s[0-9]+), ([a-zA-Z_][a-zA-z_0-9\.]*)@(gotpc)?rel32@lo\+4" "s_mov_b32 $1, $3&0xffffffff") lines)
+        lines (map #(clojure.string/replace %1 #"^s_addc_u32 (s[0-9]+), (s[0-9]+), ([a-zA-Z_][a-zA-z_0-9\.]*)@(gotpc)?rel32@hi\+4" "s_mov_b32 $1, $3>>32") lines)
         ;lines (map #(clojure.string/replace %1 #"^.Lfunc_end.*:$" ".align 256") lines)
+        ;
 
         ;lines (remove #(re-find #"^[ \t]*;" %1) lines)
         ;lines (remove #(re-find #"^$" %1) lines)
@@ -102,13 +118,13 @@
         lines (remove #(re-find #"^call_convention" %1) lines)
         lines (remove #(re-find #"^wavefront_size" %1) lines)
         lines (remove #(re-find #"^runtime_loader_kernel_symbol" %1) lines)
-        lines (remove #(re-find #"^.text$" %1) lines)
+        ;lines (remove #(re-find #"^.text$" %1) lines)
         lines (remove #(re-find #"^.hsa_code_object_" %1) lines)
         lines (remove #(re-find #"^\.section \"\.note\.GNU-stack\"$" %1) lines)
-        lines (remove #(re-find #"^(\.globl |\.p2align |\.ident |\.size )" %1) lines)
+        lines (remove #(re-find #"^(\.globl |\.p2align |\.ident |\.size |\.type )" %1) lines)
 
-        kernels (partition-by #(= ".section .AMDGPU.csdata" %1) lines)
-        kernels (remove #(= '(".section\t.AMDGPU.csdata") %1) kernels)
+        kernels (partition-by #(= ".text" %1) lines)
+        kernels (remove #(= '(".text") %1) kernels)
         kernels (remove #(not (re-find #"^.kernel " (first %1))) kernels)
 
         kernels (map (fn [lines]
@@ -128,13 +144,13 @@
                                         ; "\t\t.pgmrsrc2 0x00006040" ; Enable trap handlers.
                                         )
                                       (map #(clojure.string/replace %1 #"^" "\t\t") (second groups))
-                                      (list
-                                        "\t\t.arg _.global_offset_0, \"size_t\", long"
-                                        "\t\t.arg _.global_offset_1, \"size_t\", long"
-                                        "\t\t.arg _.global_offset_2, \"size_t\", long"
-                                        "\t\t.arg _.printf_buffer, \"size_t\", void*, global, , rdonly"
-                                        "\t\t.arg _.vqueue_pointer, \"size_t\", long"
-                                        "\t\t.arg _.aqlwrap_pointer, \"size_t\", long")
+                                      ;(list
+                                      ;  "\t\t.arg _.global_offset_0, \"size_t\", long"
+                                      ;  "\t\t.arg _.global_offset_1, \"size_t\", long"
+                                      ;  "\t\t.arg _.global_offset_2, \"size_t\", long"
+                                      ;  "\t\t.arg _.printf_buffer, \"size_t\", void*, global, , rdonly"
+                                      ;  "\t\t.arg _.vqueue_pointer, \"size_t\", long"
+                                      ;  "\t\t.arg _.aqlwrap_pointer, \"size_t\", long")
                                       (get metadata (clojure.string/replace (first (first groups)) #"^\.kernel " ""))
                                       (list
                                         "\t.text"
@@ -170,7 +186,7 @@
                                                    #"([^a-zA-Z_0-9])v\[([0-9]+):([0-9]+)\]\.w"
                                                    (fn [result] (str (nth result 1) "v" (+ 3 (Integer. (nth result 2)))))))
                                            (map #(clojure.string/replace %1 #"(flat_atomic_(add|sub)) ([^,]+), ([^,]+)$" "$1 $4, $3, $4"))
-                                           (map #(clojure.string/replace %1 #"s_waitcnt$" "s_waitcnt vmcnt(0) lgmkcnt(0) expcnt(0)"))
+                                           (map #(clojure.string/replace %1 #"s_waitcnt$" "s_waitcnt vmcnt(0) lgkmcnt(0) expcnt(0)"))
                                            ;(map #(clojure.string/replace %1 #"_e(32|64) " " "))
                                            (map #(clojure.string/replace %1 #"^.*[^:]$" "\t$0"))
                                            (map #(clojure.string/replace %1 #"_lo_i32 " "_lo_u32 "))
@@ -179,7 +195,7 @@
                          lines))
                      kernels)
         ]
-    (spit output-filename
+    (spit output-file-path
           (apply str
                  (concat
                    (list
@@ -193,38 +209,56 @@
 (def cli-options
   ;; An option with a required argument
   [["-g" "--gpu GPU" "GPU"
-    :default "Ellesmere"
-    ]
-   ["-p" "--gcnminc-path PATH" "GCNminC path"
-    ]
+    :default "Ellesmere"]
+   ["-w" "--worksize WORKSIZE" "Worksize"
+    :default 256]
    ["-v" "--verbose"]
    ["-d" "--debug"]
-   ["-h" "--help"]])
+   ["-h" "--help"]
+   ["-s" "--gds-segment-size GDS_SEGMENT_SIZE" "The size of the GDS segment for each vmid"
+    :default 0]
+   ["-O" "--optimization OPTIMIZATION" "Optimization level"
+    :parse-fn #(Integer/parseInt %)
+    :validate [#(<= 0 % 3) "Must be a number between 0 and 3"]
+    :default "3"]
+   ["-o" "--output OUTPUT" "The path of the output file"
+     :default "a.out"]])
 
 (defn -main
   [& args]
-  (let [args (clojure.tools.cli/parse-opts args cli-options)
+  (println "GCNminC, an LLVM/Clang-based offline OpenCL compiler for the AMD GCN architecture")
+  (println "Copyright (c) 2017 zawawa @ bitcointalk.org")
+  (try
+    (let [args (clojure.tools.cli/parse-opts args cli-options)
+          _ (when (:errors args)
+              (print ((:errors args)))
+              (System/exit 1))
+          _ (when (or (:help args) (not (= 1 (count (:arguments args)))))
+              (println "Usage: java -jar gcnminc.jar [-gwvdhsOo] input_file [-o output_file]")
+              (println "Options:")
+              (println (:summary args))
+              (System/exit 0))
         jar-path (.getPath (.getLocation (.getCodeSource (.getProtectionDomain gcnminc.core))))
         jar-path (URLDecoder/decode jar-path "UTF-8")
         gcnminc-path (clojure.string/replace jar-path #"/[^/]+/[^/]+/[^/]+/[^/]+$" "")
         gcnminc-path (clojure.string/replace gcnminc-path #"^/([a-zA-Z]):/" "$1:/") ; For Windows
         _ (println gcnminc-path)
         gpu (:gpu (:options args))
-        input-filename (nth (:arguments args) 0)
-        output-filename (nth (:arguments args) 1)
+        input-file-path (nth (:arguments args) 0)
+        output-file-path (:output (:options args))
         llvm-output-file     (java.io.File/createTempFile "GCNminC-llvm-" ".asm")
-        llvm-output-filename (.getPath llvm-output-file)
+        llvm-output-file-path (.getPath llvm-output-file)
         _                    (.delete llvm-output-file)
         gcnminc-output-file     (java.io.File/createTempFile "GCNminC-gcnminc-" ".asm")
-        gcnminc-output-filename (.getPath gcnminc-output-file)
+        gcnminc-output-file-path (.getPath gcnminc-output-file)
         _                       (.delete gcnminc-output-file)
         clang-path (cond
-                     (.exists (clojure.java.io/file (str gcnminc-path "/llvm-build/Release/bin/clang.EXE"))) (str gcnminc-path "/llvm-build/Release/bin/clang.EXE")
-                     (.exists (clojure.java.io/file (str gcnminc-path "/llvm-build/Debug/bin/clang.EXE"))) (str gcnminc-path "/llvm-build/Debug/bin/clang.EXE")
+                     (.exists (clojure.java.io/file (str gcnminc-path "/llvm-build/Release/bin/clang.EXE"))) (str gcnminc-path "/llvm-build/Release/bin/clang")
+                     (.exists (clojure.java.io/file (str gcnminc-path "/llvm-build/Debug/bin/clang.EXE"))) (str gcnminc-path "/llvm-build/Debug/bin/clang")
                      (.exists (clojure.java.io/file (str gcnminc-path "/llvm-build/Release/bin/clang"))) (str gcnminc-path "/llvm-build/Release/bin/clang")
                      (.exists (clojure.java.io/file (str gcnminc-path "/llvm-build/Debug/bin/clang"))) (str gcnminc-path "/llvm-build/Debug/bin/clang")
                      (.exists (clojure.java.io/file (str gcnminc-path "/llvm-build/bin/clang"))) (str gcnminc-path "/llvm-build/bin/clang")
-                     (.exists (clojure.java.io/file (str gcnminc-path "/bin/clang.EXE"))) (str gcnminc-path "/bin/clang.EXE")
+                     (.exists (clojure.java.io/file (str gcnminc-path "/bin/clang.EXE"))) (str gcnminc-path "/bin/clang")
                      :else (str gcnminc-path "/bin/clang")
                      )
         clrxasm-path (cond
@@ -233,38 +267,51 @@
                      )
         libclc-path (str gcnminc-path "/libclc/built_libs/amdgcn--amdhsa.bc")
                      ]
-    (println "Compiling:" input-filename)
+    (println (str "=== Compiling OpenCL source code: "  input-file-path " ==="))
     (if (:debug (:options args))
       (println "libclc-path:" libclc-path))
-    (println (:err
+    (print (:err
                (clojure.java.shell/sh
                  clang-path
                  "-target" "amdgcn--amdhsa"
-                 "-mcpu=gfx804"
+                 (case (:gpu (:options args))
+                   "Ellesmere" "-mcpu=gfx804"
+                   "ellesmere" "-mcpu=gfx804"
+                   "-mcpu=gfx804")
                  (str "-I" gcnminc-path "/libclc/generic/include")
                  "-include" (str gcnminc-path "/libclc/generic/include/clc/clc.h")
                  "-Dcl_clang_storage_class_specifiers "
                  "-x" "cl"
                  "-std=CL2.0"
-                 input-filename
-                 "-D__OPENCL_VERSION__=120"
-                 "-DWORKSIZE=256"
+                 input-file-path
                  "-S"
-                 "-o" llvm-output-filename
+                 "-o" llvm-output-file-path
                  "-Xclang"
                  "-mlink-bitcode-file"
                  "-Xclang"
                  libclc-path
                  "-fno-builtin"
                  "-D__GCNMINC__"
-                 "-D__GCN3__"
-                 "-O3")))
-    (println "Converting output..." gpu llvm-output-filename gcnminc-output-filename)
-    (convert-llvm-output gpu llvm-output-filename gcnminc-output-filename)
-    (println "Generating binary:" output-filename )
+
+                 "-D__OPENCL_VERSION__=120"
+                 (case (:gpu (:options args))
+                   "Ellesmere" "-D__GCN3__"
+                   "ellesmere" "-D__GCN3__"
+                   "-D__GCN3__")
+                 (str "-DWORKSIZE=" (:worksize (:options args)))
+                 (str "-O" (:optimization (:options args)))
+                 :dir (System/getProperty "user.dir")
+                 )))
+    (println (str "=== Converting LLVM output: "  llvm-output-file-path " ==="))
+    (println (str "=== Generated CLRX input: "  gcnminc-output-file-path " ==="))
+    (convert-llvm-output gpu llvm-output-file-path gcnminc-output-file-path)
+    (println (str "=== Generating OpenCL binary: " output-file-path " ==="))
     (println (:err
       (clojure.java.shell/sh
        clrxasm-path
-       gcnminc-output-filename
-       "-o" output-filename))))
+       gcnminc-output-file-path
+       "-o" output-file-path))))
+    (catch Throwable e
+           (println (str e))
+           ))
   (shutdown-agents))
