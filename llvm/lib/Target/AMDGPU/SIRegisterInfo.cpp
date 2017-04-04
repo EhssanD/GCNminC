@@ -27,7 +27,7 @@ using namespace llvm;
 static cl::opt<bool> EnableSpillSGPRToSMEM(
   "amdgpu-spill-sgpr-to-smem",
   cl::desc("Use scalar stores to spill SGPRs if supported by subtarget"),
-  cl::init(true)); // zawawa
+  cl::init(false)); // zawawa
 
 
 static bool hasPressureSet(const int *PSets, unsigned PSetID) {

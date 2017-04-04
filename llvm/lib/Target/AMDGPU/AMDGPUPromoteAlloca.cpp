@@ -214,7 +214,7 @@ bool AMDGPUPromoteAlloca::runOnFunction(Function &F) {
   // on other factors..
   unsigned OccupancyHint = ST.getWavesPerEU(F).second;
   if (OccupancyHint == 0)
-    OccupancyHint = 1; // zawawa
+    OccupancyHint = 2; // zawawa
 
   // Clamp to max value.
   OccupancyHint = std::min(OccupancyHint, ST.getMaxWavesPerEU());
@@ -421,8 +421,8 @@ static bool tryPromoteAllocaToVector(AllocaInst *Alloca) {
   // FIXME: There is no reason why we can't support larger arrays, we
   // are just being conservative for now.
   if (!AllocaTy ||
-      //AllocaTy->getElementType()->isVectorTy() || // zawawa
-      AllocaTy->getNumElements() > 256 || // zawawa
+      AllocaTy->getElementType()->isVectorTy() || // zawawa
+      AllocaTy->getNumElements() > 8 || // zawawa: 8
       AllocaTy->getNumElements() < 2) {
     DEBUG(dbgs() << "  Cannot convert type to vector\n");
     return false;

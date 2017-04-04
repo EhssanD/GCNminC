@@ -6,7 +6,7 @@
   (:import (java.net URLDecoder)))
 
 (defn convert-llvm-output
-  [gpu input-file-path output-file-path]
+  [gpu input-file-path output-file-path args]
   (let [lines (clojure.string/split (slurp input-file-path) #"([\t ]*;[^\n]*)?[\t ]*\r?\n\t*") ; Convert consecutive white spaces into one white space.
         lines (remove #(re-find #"^$" %1) lines)
         lines (remove #(re-find #"^;" %1) lines)
@@ -83,7 +83,7 @@
         lines (map #(clojure.string/replace %1 #"^priority = " ".priority ") lines)
         lines (map #(clojure.string/replace %1 #"^workitem_private_segment_byte_size =" ".scratchbuffer") lines)
         lines (map #(clojure.string/replace %1 #"^workgroup_group_segment_byte_size =" ".localsize") lines)
-        lines (map #(clojure.string/replace %1 #"^gds_segment_byte_size =" ".gdssize") lines)
+        lines (map #(clojure.string/replace %1 #"^gds_segment_byte_size = .*$" (str ".gdssize " (:gds-segment-size (:options args)))) lines)
         lines (map #(clojure.string/replace %1 #"^\.section \.AMDGPU\.csdata.*$" ".data") lines)
         lines (map #(clojure.string/replace %1 #"^\.section \.rodata.*$" ".globaldata") lines)
         lines (map #(clojure.string/replace %1 #"^s_add_u32 (s[0-9]+), (s[0-9]+), ([a-zA-Z_][a-zA-z_0-9\.]*)@(gotpc)?rel32@lo\+4" "s_mov_b32 $1, $3&0xffffffff") lines)
@@ -299,12 +299,13 @@
                    "ellesmere" "-D__GCN3__"
                    "-D__GCN3__")
                  (str "-DWORKSIZE=" (:worksize (:options args)))
+                 (str "-DGDS_SEGMENT_SIZE=" (:gds-segment-size (:options args)))
                  (str "-O" (:optimization (:options args)))
                  :dir (System/getProperty "user.dir")
                  )))
     (println (str "=== Converting LLVM output: "  llvm-output-file-path " ==="))
     (println (str "=== Generated CLRX input: "  gcnminc-output-file-path " ==="))
-    (convert-llvm-output gpu llvm-output-file-path gcnminc-output-file-path)
+    (convert-llvm-output gpu llvm-output-file-path gcnminc-output-file-path args)
     (println (str "=== Generating OpenCL binary: " output-file-path " ==="))
     (println (:err
       (clojure.java.shell/sh

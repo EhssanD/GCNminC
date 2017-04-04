@@ -344,8 +344,9 @@ static Kernel::Metadata getRuntimeMDForKernel(const Function &F) {
   }
 
   // Emit hidden kernel arguments for OpenCL kernels.
-  if (F.getParent()->getNamedMetadata("opencl.ocl.version")) {
+  if (F.getParent()->getNamedMetadata("opencl.ocl.version")) { // zawawa
     auto Int64T = Type::getInt64Ty(F.getContext());
+    /*
     Kernel.Args.emplace_back(getRuntimeMDForKernelArg(DL, Int64T,
         KernelArg::HiddenGlobalOffsetX));
     Kernel.Args.emplace_back(getRuntimeMDForKernelArg(DL, Int64T,
@@ -358,6 +359,13 @@ static Kernel::Metadata getRuntimeMDForKernel(const Function &F) {
       Kernel.Args.emplace_back(getRuntimeMDForKernelArg(DL, Int8PtrT,
           KernelArg::HiddenPrintfBuffer));
     }
+    */
+    Kernel.Args.emplace(Kernel.Args.begin(), getRuntimeMDForKernelArg(DL, Int64T, KernelArg::HiddenCompletionAction));
+    Kernel.Args.emplace(Kernel.Args.begin(), getRuntimeMDForKernelArg(DL, Int64T, KernelArg::HiddenDefaultQueue));
+    Kernel.Args.emplace(Kernel.Args.begin(), getRuntimeMDForKernelArg(DL, Int64T, KernelArg::HiddenPrintfBuffer));
+    Kernel.Args.emplace(Kernel.Args.begin(), getRuntimeMDForKernelArg(DL, Int64T, KernelArg::HiddenGlobalOffsetZ));
+    Kernel.Args.emplace(Kernel.Args.begin(), getRuntimeMDForKernelArg(DL, Int64T, KernelArg::HiddenGlobalOffsetY));
+    Kernel.Args.emplace(Kernel.Args.begin(), getRuntimeMDForKernelArg(DL, Int64T, KernelArg::HiddenGlobalOffsetX));
   }
 
   // Set ReqdWorkGroupSize, WorkGroupSizeHint, and VecTypeHint.
